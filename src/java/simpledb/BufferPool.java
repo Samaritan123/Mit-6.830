@@ -2,7 +2,12 @@ package simpledb;
 
 import java.io.*;
 
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -16,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @Threadsafe, all fields are final
  */
 public class BufferPool {
+
     /** Bytes per page, including header. */
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
@@ -26,6 +32,8 @@ public class BufferPool {
     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
 
+    private int numPages;
+
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -33,6 +41,7 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         // some code goes here
+        this.numPages = numPages;
     }
     
     public static int getPageSize() {
@@ -48,6 +57,23 @@ public class BufferPool {
     public static void resetPageSize() {
     	BufferPool.pageSize = DEFAULT_PAGE_SIZE;
     }
+
+
+    public class LRULinkedHashMap<K, V> extends LinkedHashMap<K, V> {
+
+        private static final float DEFAULT_LOAD_FACTOR = 0.75f;
+
+        public LRULinkedHashMap() {
+            super(numPages, DEFAULT_LOAD_FACTOR, true);
+        }
+
+        @Override
+        protected boolean removeEldestEntry(java.util.Map.Entry<K, V> eldest) {
+            return size() > numPages;
+        }
+    }
+
+    private Map<PageId, Page> map = new LRULinkedHashMap<>();
 
     /**
      * Retrieve the specified page with the associated permissions.
@@ -67,7 +93,10 @@ public class BufferPool {
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        if (map.containsKey(pid)) return map.get(pid);
+        Page page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+        map.put(pid, page);
+        return page;
     }
 
     /**

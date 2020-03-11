@@ -67,19 +67,21 @@ public class HeapPage implements Page {
     */
     private int getNumTuples() {        
         // some code goes here
-        return 0;
-
+        return (BufferPool.getPageSize()*8) / (td.getSize() * 8 + 1);
+       // return (int) Math.floor((BufferPool.getPageSize()*8) / (td.getSize() * 8 + 1));
     }
 
     /**
      * Computes the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
-    private int getHeaderSize() {        
-        
+    private int getHeaderSize() {
         // some code goes here
-        return 0;
-                 
+        //return (int) Math.ceil(getNumTuples()/8);
+        int nheaderbytes = getNumTuples() / 8;
+        if (nheaderbytes * 8 < getNumTuples())
+            nheaderbytes++;  //ceiling
+        return nheaderbytes;
     }
     
     /** Return a view of this page before it was modified
@@ -112,7 +114,8 @@ public class HeapPage implements Page {
      */
     public HeapPageId getId() {
     // some code goes here
-    throw new UnsupportedOperationException("implement this");
+        return pid;
+    // throw new UnsupportedOperationException("implement this");
     }
 
     /**
@@ -282,7 +285,11 @@ public class HeapPage implements Page {
      */
     public int getNumEmptySlots() {
         // some code goes here
-        return 0;
+        int num = 0;
+        for (int i = 0; i < numSlots; i ++) {
+            if (!isSlotUsed(i)) num ++;
+        }
+        return num;
     }
 
     /**
@@ -290,6 +297,8 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // some code goes here
+        int x = i / 8, k = i % 8;
+        if (((header[x] >> k) & 1) > 0) return true;
         return false;
     }
 
@@ -307,7 +316,28 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        return null;
+        return new Iterator<Tuple>() {
+
+            private int num = 0;
+            @Override
+            public boolean hasNext() {
+                for (int i = num; i < tuples.length; i ++) {
+                    if (tuples[i] != null) return true;
+                }
+                return false;
+            }
+
+            @Override
+            public Tuple next() {
+                for (int i = num; i < tuples.length; i ++) {
+                    if (tuples[i] != null) {
+                        num = i + 1;
+                        return tuples[i];
+                    }
+                }
+                return null;
+            }
+        };
     }
 
 }

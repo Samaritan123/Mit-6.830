@@ -18,12 +18,19 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
+    private Map<String, DbFile> stringDbFileMap;
+    private Map<String, String> stringStringMap;
+    private Map<Integer, String> integerStringMap;
+
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
         // some code goes here
+        stringDbFileMap = new HashMap<>();
+        stringStringMap = new HashMap<>();
+        integerStringMap = new HashMap<>();
     }
 
     /**
@@ -37,6 +44,9 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
+        stringDbFileMap.put(name, file);
+        stringStringMap.put(name, pkeyField);
+        integerStringMap.put(file.getId(), name);
     }
 
     public void addTable(DbFile file, String name) {
@@ -60,7 +70,8 @@ public class Catalog {
      */
     public int getTableId(String name) throws NoSuchElementException {
         // some code goes here
-        return 0;
+        if (!stringDbFileMap.containsKey(name)) throw new NoSuchElementException();
+        return stringDbFileMap.get(name).getId();
     }
 
     /**
@@ -71,7 +82,8 @@ public class Catalog {
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if (!integerStringMap.containsKey(tableid)) throw new NoSuchElementException();
+        return stringDbFileMap.get(integerStringMap.get(tableid)).getTupleDesc();
     }
 
     /**
@@ -82,27 +94,51 @@ public class Catalog {
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        return stringDbFileMap.get(integerStringMap.get(tableid));
     }
 
     public String getPrimaryKey(int tableid) {
         // some code goes here
-        return null;
+        return stringStringMap.get(integerStringMap.get(tableid));
     }
+
+    public class IteratorCatalog implements Iterator<Integer> {
+
+        private Iterator<Map.Entry<String, DbFile>> iterator;
+
+        public IteratorCatalog() {
+            iterator = stringDbFileMap.entrySet().iterator();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iterator.hasNext();
+        }
+
+        @Override
+        public Integer next() {
+            if (!hasNext()) return null;
+            return iterator.next().getValue().getId();
+        }
+    }
+
 
     public Iterator<Integer> tableIdIterator() {
         // some code goes here
-        return null;
+        return new IteratorCatalog();
     }
 
     public String getTableName(int id) {
         // some code goes here
-        return null;
+        return integerStringMap.get(id);
     }
     
     /** Delete all tables from the catalog */
     public void clear() {
         // some code goes here
+        integerStringMap.clear();
+        stringStringMap.clear();
+        stringDbFileMap.clear();
     }
     
     /**
