@@ -103,6 +103,9 @@ public class SeqScan implements OpIterator {
         for (String s: fieldAr) {
             s = getAlias() + "." + s;
         }
+        for (int i = 0; i < td.numFields(); i ++) {
+            typeAr[i] = td.getFieldType(i);
+        }
         return new TupleDesc(typeAr, fieldAr);
     }
 

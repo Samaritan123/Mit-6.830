@@ -22,6 +22,9 @@ public class HeapPage implements Page {
     byte[] oldData;
     private final Byte oldDataLock=new Byte((byte)0);
 
+    private TransactionId transactionId;
+    private boolean dirty;
+
     /**
      * Create a HeapPage from a set of bytes of data read from disk.
      * The format of a HeapPage is a set of header bytes indicating
@@ -40,6 +43,7 @@ public class HeapPage implements Page {
      */
     public HeapPage(HeapPageId id, byte[] data) throws IOException {
         this.pid = id;
+        this.dirty = false;
         this.td = Database.getCatalog().getTupleDesc(id.getTableId());
         this.numSlots = getNumTuples();
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
@@ -248,6 +252,24 @@ public class HeapPage implements Page {
     public void deleteTuple(Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
+        if (t.getRecordId() == null) throw new DbException("tuple is not on this page");
+        for (int i = 0; i < numSlots; i ++) {
+//            if (!isSlotUsed(i)) continue;
+            if (tuples[i] == null) continue;
+            boolean flag = false;
+//            for (int j = 0; j < t.getTupleDesc().numFields(); i ++) {
+//                if (t.getField(j).equals(tuples[i].getField(j))) flag = false;
+//            }
+            if (t.getRecordId().equals(tuples[i].getRecordId())) flag = true;
+            if (flag) {
+                if (!isSlotUsed(i)) throw new DbException("tuple slot is\n" +
+                        "     *         already empty");
+//                t.setRecordId(null);
+                markSlotUsed(i, false);
+                return;
+            }
+        }
+        throw new DbException("tuple is not on this page");
     }
 
     /**
@@ -260,6 +282,18 @@ public class HeapPage implements Page {
     public void insertTuple(Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
+        if (getNumEmptySlots() == 0) throw new DbException("no empty slots");
+        if (!td.equals(t.getTupleDesc())) throw new DbException("tupledesc\n" +
+                "     *         is mismatch");
+        for (int i = 0; i < numSlots; i ++) {
+            if (!isSlotUsed(i)) {
+                markSlotUsed(i, true);
+                RecordId recordId = new RecordId(getId(), i);
+                t.setRecordId(recordId);
+                tuples[i] = t;
+                break;
+            }
+        }
     }
 
     /**
@@ -269,6 +303,8 @@ public class HeapPage implements Page {
     public void markDirty(boolean dirty, TransactionId tid) {
         // some code goes here
 	// not necessary for lab1
+        this.dirty = dirty;
+        transactionId = tid;
     }
 
     /**
@@ -277,7 +313,8 @@ public class HeapPage implements Page {
     public TransactionId isDirty() {
         // some code goes here
 	// Not necessary for lab1
-        return null;      
+        if (this.dirty) return transactionId;
+        return null;
     }
 
     /**
@@ -308,6 +345,10 @@ public class HeapPage implements Page {
     private void markSlotUsed(int i, boolean value) {
         // some code goes here
         // not necessary for lab1
+        int  x = i / 8, k = i % 8, t = 0;
+        if (value) t = 1;
+        if (isSlotUsed(i)) header[x] -= (1 << k);
+        header[x] |= (t << k);
     }
 
     /**
@@ -322,7 +363,7 @@ public class HeapPage implements Page {
             @Override
             public boolean hasNext() {
                 for (int i = num; i < tuples.length; i ++) {
-                    if (tuples[i] != null) return true;
+                    if (isSlotUsed(i)) return true;
                 }
                 return false;
             }
@@ -330,7 +371,7 @@ public class HeapPage implements Page {
             @Override
             public Tuple next() {
                 for (int i = num; i < tuples.length; i ++) {
-                    if (tuples[i] != null) {
+                    if (isSlotUsed(i)) {
                         num = i + 1;
                         return tuples[i];
                     }
