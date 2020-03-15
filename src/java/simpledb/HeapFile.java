@@ -100,6 +100,12 @@ public class HeapFile implements DbFile {
     public void writePage(Page page) throws IOException {
         // some code goes here
         // not necessary for lab1
+        byte[] pageData = page.getPageData();
+        FileOutputStream fileOutputStream = new FileOutputStream(f);
+        fileOutputStream.write(pageData,
+                page.getId().getPageNumber()*BufferPool.getPageSize(),
+                BufferPool.getPageSize());
+        fileOutputStream.close();
     }
 
     /**

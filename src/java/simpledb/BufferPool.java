@@ -2,10 +2,7 @@ package simpledb;
 
 import java.io.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -72,9 +69,10 @@ public class BufferPool {
         protected boolean removeEldestEntry(java.util.Map.Entry<K, V> eldest) {
             return size() > numPages;
         }
+
     }
 
-    private Map<PageId, Page> map = new LRULinkedHashMap<>();
+    private Map<PageId, Page> map = new LinkedHashMap<>();
 
     /**
      * Retrieve the specified page with the associated permissions.
@@ -96,6 +94,7 @@ public class BufferPool {
         // some code goes here
         if (map.containsKey(pid)) return map.get(pid);
         Page page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+        if (map.size() >= numPages) evictPage();
         map.put(pid, page);
         return page;
     }
@@ -203,7 +202,10 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
         // not necessary for lab1
-
+        Iterator<Map.Entry<PageId, Page>> iterator = map.entrySet().iterator();
+        while (iterator.hasNext()) {
+            flushPage(iterator.next().getKey());
+        }
     }
 
     /** Remove the specific page id from the buffer pool.
@@ -217,6 +219,11 @@ public class BufferPool {
     public synchronized void discardPage(PageId pid) {
         // some code goes here
         // not necessary for lab1
+        Iterator<Map.Entry<PageId, Page>> iterator = map.entrySet().iterator();
+        if (iterator.hasNext()) {
+            iterator.next();
+            iterator.remove();
+        }
     }
 
     /**
@@ -226,6 +233,11 @@ public class BufferPool {
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
+        Page page = map.get(pid);
+        if (page.isDirty() != null) {
+            Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
+            page.markDirty(false, page.isDirty());
+        }
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -242,6 +254,16 @@ public class BufferPool {
     private synchronized  void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+        Iterator<Map.Entry<PageId, Page>> iterator = map.entrySet().iterator();
+        if (iterator.hasNext()) {
+            PageId pid = iterator.next().getKey();
+            try {
+                flushPage(pid);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            iterator.remove();
+        }
     }
 
 }
