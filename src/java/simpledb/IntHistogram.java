@@ -4,6 +4,15 @@ package simpledb;
  */
 public class IntHistogram {
 
+    private int buckets;
+    private int min;
+    private int max;
+    private int num[];
+    private int width[];
+    private int l[];
+    private int r[];
+    private int count;
+
     /**
      * Create a new IntHistogram.
      * 
@@ -22,6 +31,28 @@ public class IntHistogram {
      */
     public IntHistogram(int buckets, int min, int max) {
     	// some code goes here
+        this.buckets = buckets;
+        this.min = min;
+        this.max = max;
+        num = new int[buckets];
+        width = new int[buckets];
+        l = new int[buckets];
+        r = new int[buckets];
+        int k = min;
+        for (int i = 0; i < buckets; i ++) {
+            width[i] = (max - min + 1) / buckets;
+            if (i < (max - min  + 1) % buckets) width[i] ++;
+            l[i] = k; r[i] = k + width[i] - 1;
+            k += width[i];
+        }
+    }
+
+    private int belong(int v) {
+        if (v < min || v > max) return -1;
+        for (int i = 0; i < buckets; i ++) {
+            if (v >= l[i] && v <= r[i]) return i;
+        }
+        return -1;
     }
 
     /**
@@ -30,6 +61,40 @@ public class IntHistogram {
      */
     public void addValue(int v) {
     	// some code goes here
+        int k = belong(v);
+        if (k < 0) return;
+        num[k] ++;
+        count ++;
+    }
+
+    private float equalNum(int v) {
+        int k = belong(v);
+        if (k < 0) return 0;
+        return (float)num[k] / width[k];
+    }
+
+    private float lessNum(int v) {
+        if (v <= min) return 0;
+        if (v > max) return count;
+        int k = belong(v);
+        float w = 0;
+        for (int i = 0; i < k; i ++) {
+            w += num[i];
+        }
+        if (v > l[k]) w += (float)num[k] / (v - l[k]);
+        return w;
+    }
+
+    private float greaterNum(int v) {
+        if (v >= max) return 0;
+        if (v < min) return count;
+        int k = belong(v);
+        float w = 0;
+        for (int i = k + 1; i < buckets; i ++) {
+            w += num[i];
+        }
+        if (r[k] > v) w += (float)num[k] / (r[k] - v);
+        return w;
     }
 
     /**
@@ -43,11 +108,27 @@ public class IntHistogram {
      * @return Predicted selectivity of this particular operator and value
      */
     public double estimateSelectivity(Predicate.Op op, int v) {
-
     	// some code goes here
-        return -1.0;
+        float estimateNum = 0;
+        if (op == Predicate.Op.EQUALS) {
+            estimateNum = equalNum(v);
+        } else if (op == Predicate.Op.LESS_THAN) {
+            estimateNum = lessNum(v);
+        } else if (op == Predicate.Op.LESS_THAN_OR_EQ) {
+            estimateNum = lessNum(v);
+            estimateNum += equalNum(v);
+        } else if (op == Predicate.Op.GREATER_THAN) {
+            estimateNum = greaterNum(v);
+        } else if (op == Predicate.Op.GREATER_THAN_OR_EQ) {
+            estimateNum = greaterNum(v);
+            estimateNum += equalNum(v);
+        } else if (op == Predicate.Op.NOT_EQUALS) {
+            estimateNum += count - equalNum(v);
+        }
+        return estimateNum / count;
     }
-    
+
+
     /**
      * @return
      *     the average selectivity of this histogram.

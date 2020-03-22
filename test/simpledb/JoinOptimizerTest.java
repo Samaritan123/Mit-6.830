@@ -500,7 +500,7 @@ public class JoinOptimizerTest extends SimpleDbTestBase {
                 Predicate.Op.EQUALS));
 
         // Make sure we don't give the nodes to the optimizer in a nice order
-        Collections.shuffle(nodes);
+//        Collections.shuffle(nodes);
         Parser p = new Parser();
         j = new JoinOptimizer(
                 p.generateLogicalPlan(

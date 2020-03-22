@@ -111,7 +111,7 @@ public class JoinOptimizer {
             // HINT: You may need to use the variable "j" if you implemented
             // a join algorithm that's more complicated than a basic
             // nested-loops join.
-            return -1.0;
+            return cost1 + card1 * cost2 + card1 * card2;
         }
     }
 
@@ -157,7 +157,16 @@ public class JoinOptimizer {
             Map<String, Integer> tableAliasToId) {
         int card = 1;
         // some code goes here
-        return card <= 0 ? 1 : card;
+        if (joinOp == Predicate.Op.EQUALS) {
+            if (t1pkey || t2pkey) {
+                card = t1pkey ? card2 : card1;
+            } else {
+                card = card1 >= card2 ? card1 : card2;
+            }
+        } else {
+            card = (int)(card1 * card2 * 0.3);
+        }
+        return card;
     }
 
     /**
@@ -220,8 +229,30 @@ public class JoinOptimizer {
         //Not necessary for labs 1--3
 
         // some code goes here
-        //Replace the following
-        return joins;
+        PlanCache planCache = new PlanCache();
+        for (int i = 1; i <= joins.size(); i ++) {
+            Set<Set<LogicalJoinNode>> sets = enumerateSubsets(joins, i);
+//            System.out.println(i+ "=" +sets.size());
+            for (Set<LogicalJoinNode> s: sets) {
+                double bestCostSoFar = 1e15;
+                for (LogicalJoinNode joinToMove: s) {
+                    CostCard costCard = computeCostAndCardOfSubplan(stats,
+                            filterSelectivities, joinToMove, s,
+                            bestCostSoFar, planCache);
+                    if (costCard != null && costCard.cost < bestCostSoFar) {
+                        bestCostSoFar = costCard.cost;
+                        planCache.addPlan(s, costCard.cost, costCard.card, costCard.plan);
+                    }
+                }
+            }
+        }
+        Set<LogicalJoinNode> set = new HashSet<>();
+        for (LogicalJoinNode node: joins) {
+            set.add(node);
+        }
+        Vector<LogicalJoinNode> js = planCache.getOrder(set);
+        if (explain == true) printJoins(js, planCache, stats, filterSelectivities);
+        return js;
     }
 
     // ===================== Private Methods =================================

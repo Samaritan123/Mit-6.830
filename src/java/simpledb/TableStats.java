@@ -16,6 +16,10 @@ public class TableStats {
     private static final ConcurrentHashMap<String, TableStats> statsMap = new ConcurrentHashMap<String, TableStats>();
 
     static final int IOCOSTPERPAGE = 1000;
+    private DbFile databaseFile;
+    private IntHistogram[] intHistograms;
+    private int numTuple = 0;
+    private int ioCostPerPage;
 
     public static TableStats getTableStats(String tablename) {
         return statsMap.get(tablename);
@@ -85,6 +89,68 @@ public class TableStats {
         // necessarily have to (for example) do everything
         // in a single scan of the table.
         // some code goes here
+        this.ioCostPerPage = ioCostPerPage;
+        databaseFile = Database.getCatalog().getDatabaseFile(tableid);
+        int numFields = databaseFile.getTupleDesc().numFields();
+        intHistograms = new IntHistogram[numFields];
+        int min[] = new int[numFields];
+        int max[] = new int[numFields];
+        int k = 0;
+        DbFileIterator iterator = databaseFile.iterator(null);
+        try {
+            iterator.open();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        while (true) {
+            try {
+                if (!iterator.hasNext()) break;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            Tuple tuple = null;
+            try {
+                tuple = iterator.next();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            for (int i = 0; i < numFields; i ++) {
+                int field = ((IntField)tuple.getField(i)).getValue();
+                if (k == 0) {
+                    min[i] = max[i] = field;
+                } else {
+                    if (min[i] > field) min[i] = field;
+                    if (max[i] < field) max[i] = field;
+                }
+            }
+            k ++;
+        }
+        numTuple = k;
+        for (int i = 0; i < numFields; i ++) {
+            intHistograms[i] = new IntHistogram(NUM_HIST_BINS, min[i], max[i]);
+        }
+        try {
+            iterator.rewind();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        while (true) {
+            try {
+                if (!iterator.hasNext()) break;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            Tuple tuple = null;
+            try {
+                tuple = iterator.next();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            for (int i = 0; i < numFields; i ++) {
+                int field = ((IntField)tuple.getField(i)).getValue();
+                intHistograms[i].addValue(field);
+            }
+        }
     }
 
     /**
@@ -101,7 +167,7 @@ public class TableStats {
      */
     public double estimateScanCost() {
         // some code goes here
-        return 0;
+        return ((HeapFile)databaseFile).numPages() * ioCostPerPage;
     }
 
     /**
@@ -110,12 +176,12 @@ public class TableStats {
      * 
      * @param selectivityFactor
      *            The selectivity of any predicates over the table
-     * @return The estimated cardinality of the scan with the specified
+     *      * @return The estimated cardinality of the scan with the specified
      *         selectivityFactor
      */
     public int estimateTableCardinality(double selectivityFactor) {
         // some code goes here
-        return 0;
+        return (int)(totalTuples() * selectivityFactor);
     }
 
     /**
@@ -148,7 +214,7 @@ public class TableStats {
      */
     public double estimateSelectivity(int field, Predicate.Op op, Field constant) {
         // some code goes here
-        return 1.0;
+        return intHistograms[field].estimateSelectivity(op, ((IntField)constant).getValue());
     }
 
     /**
@@ -156,7 +222,7 @@ public class TableStats {
      * */
     public int totalTuples() {
         // some code goes here
-        return 0;
+        return numTuple;
     }
 
 }
