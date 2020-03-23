@@ -78,10 +78,14 @@ public class BufferPool {
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
+        boolean commit;
         if (perm == Permissions.READ_ONLY)
-            lockManager.acquireReadLock(pid, tid);
+            commit = lockManager.acquireReadLock(pid, tid);
         else
-            lockManager.acquireWriteLock(pid, tid);
+            commit = lockManager.acquireWriteLock(pid, tid);
+        if (commit == false) {
+            throw new TransactionAbortedException();
+        }
         synchronized (this) {
             if (map.containsKey(pid)) return map.get(pid);
         }
@@ -90,13 +94,10 @@ public class BufferPool {
         return page;
     }
 
-    private synchronized void addPage(Page page) {
+    private synchronized void addPage(Page page) throws DbException {
+        if (map.containsKey(page.getId())) return;
         if (map.size() >= numPages) {
-            try {
-                evictPage();
-            } catch (DbException e) {
-                e.printStackTrace();
-            }
+           evictPage();
         }
         map.put(page.getId(), page);
     }
@@ -246,6 +247,7 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1
         Page page = map.get(pid);
+        if (page == null) return;
         if (page.isDirty() != null) {
             Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
             page.markDirty(false, null);
@@ -264,8 +266,10 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1|lab2
         List<PageId> pages = lockManager.getPages(tid);
-        for (PageId pageId: pages) {
-            restorePage(pageId);
+        if (pages != null) {
+            for (PageId pageId : pages) {
+                restorePage(pageId);
+            }
         }
     }
 
@@ -275,8 +279,10 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1|lab2
         List<PageId> pages = lockManager.getPages(tid);
-        for (PageId pageId: pages) {
-            flushPage(pageId);
+        if (pages != null) {
+            for (PageId pageId : pages) {
+                flushPage(pageId);
+            }
         }
     }
 

@@ -27,19 +27,22 @@ public class LockManager {
             this.set = new HashSet<>();
         }
 
-        public void acquireReadLock(TransactionId tid) {
+        public boolean acquireReadLock(TransactionId tid) {
+            int k = 0;
             while (true) {
+                k ++;
                 synchronized (this) {
-                    if (set.contains(tid)) return;
+                    if (set.contains(tid)) return true;
                     if (lockType != 1) {
                         lockType = -1;
                         set.add(tid);
                         synchronized (tpMap) {
                             tpMap.get(tid).add(pid);
                         }
-                        return;
+                        return true;
                     }
                 }
+                if (k > 10) return false;
                 try {
                     Thread.sleep(50);
                 } catch (InterruptedException e) {
@@ -48,13 +51,15 @@ public class LockManager {
             }
         }
 
-        public void acquireWriteLock(TransactionId tid) {
+        public boolean acquireWriteLock(TransactionId tid) {
+            int k = 0;
             while (true) {
+                k ++;
                 synchronized (this) {
-                    if (lockType == 1 && set.contains(tid)) return;
+                    if (lockType == 1 && set.contains(tid)) return true;
                     if (lockType < 0 && set.size() == 1 && set.contains(tid)) {
                         lockType = 1;
-                        return;
+                        return true;
                     }
                     if (lockType == 0) {
                         lockType = 1;
@@ -62,9 +67,10 @@ public class LockManager {
                         synchronized (tpMap) {
                             tpMap.get(tid).add(pid);
                         }
-                        return;
+                        return true;
                     }
                 }
+                if (k > 10) return false;
                 try {
                     Thread.sleep(50);
                 } catch (InterruptedException e) {
@@ -93,7 +99,7 @@ public class LockManager {
     private Map<PageId, Lock> map = new HashMap<>(); //一个Page对应一把Lock
     private Map<TransactionId, List<PageId>> tpMap = new HashMap<>(); //一个Transaction对应多个page
 
-    public void acquireReadLock(PageId pid, TransactionId tid) {
+    public boolean acquireReadLock(PageId pid, TransactionId tid) {
         Lock lock = null;
         synchronized (map) {
             if (!map.containsKey(pid)) {
@@ -106,10 +112,10 @@ public class LockManager {
                 tpMap.put(tid, new ArrayList<PageId>());
             }
         }
-        lock.acquireReadLock(tid);
+        return lock.acquireReadLock(tid);
     }
 
-    public void acquireWriteLock(PageId pid, TransactionId tid) {
+    public boolean acquireWriteLock(PageId pid, TransactionId tid) {
         Lock lock = null;
         synchronized (map) {
             if (!map.containsKey(pid)) {
@@ -122,7 +128,7 @@ public class LockManager {
                 tpMap.put(tid, new ArrayList<PageId>());
             }
         }
-        lock.acquireWriteLock(tid);
+        return lock.acquireWriteLock(tid);
     }
 
     public void releasePage(PageId pid, TransactionId tid, boolean tpMapRemove) {
@@ -142,10 +148,12 @@ public class LockManager {
         List<PageId> pageIds = null;
         synchronized (tpMap) {
             pageIds = tpMap.get(tid);
-            for (PageId pageId : pageIds) {
-                releasePage(pageId, tid, false);
+            if (pageIds != null) {
+                for (PageId pageId : pageIds) {
+                    releasePage(pageId, tid, false);
+                }
+                tpMap.get(tid).clear();
             }
-            tpMap.get(tid).clear();
         }
     }
 
@@ -160,7 +168,8 @@ public class LockManager {
 
     public List<PageId> getPages(TransactionId tid) {
         synchronized (tpMap) {
-            return tpMap.get(tid);
+            if (!tpMap.containsKey(tid)) return null;
+            return new ArrayList<>(tpMap.get(tid));
         }
     }
 }
