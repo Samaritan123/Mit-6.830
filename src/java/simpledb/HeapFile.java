@@ -101,11 +101,12 @@ public class HeapFile implements DbFile {
         // some code goes here
         // not necessary for lab1
         byte[] pageData = page.getPageData();
-        FileOutputStream fileOutputStream = new FileOutputStream(f);
-        fileOutputStream.write(pageData,
-                page.getId().getPageNumber()*BufferPool.getPageSize(),
-                BufferPool.getPageSize());
-        fileOutputStream.close();
+        RandomAccessFile raf = new RandomAccessFile(f, "rw");
+        synchronized (f) {
+            raf.seek(page.getId().getPageNumber() * BufferPool.getPageSize());
+            raf.write(pageData, 0, BufferPool.getPageSize());
+            raf.close();
+        }
     }
 
     /**
@@ -125,7 +126,10 @@ public class HeapFile implements DbFile {
             HeapPageId heapPageId = new HeapPageId(getId(), i);
             Page page = Database.getBufferPool().getPage(tid, heapPageId,
                     Permissions.READ_WRITE);
-            if (((HeapPage)page).getNumEmptySlots() == 0) continue;
+            if (((HeapPage)page).getNumEmptySlots() == 0) {
+                Database.getBufferPool().releasePage(tid, heapPageId);
+                continue;
+            }
             ((HeapPage)page).insertTuple(t);
 //            ((HeapPage)page).markDirty(true, tid);
             return new ArrayList<Page>(Arrays.asList(page));
@@ -173,8 +177,10 @@ public class HeapFile implements DbFile {
                 if (open == false) return false;
                 if (iterator == null || !iterator.hasNext()) {
                     while (true) {
-                        if (pageNum >= numPages() - 1) return false;
-                        pageNum++;
+                        synchronized (f) {
+                            if (pageNum >= numPages() - 1) return false;
+                            pageNum ++;
+                        }
                         PageId pid = new HeapPageId(getId(), pageNum);
                         HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pid, Permissions.READ_ONLY);
                         iterator = page.iterator();
